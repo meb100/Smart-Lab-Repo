@@ -1,5 +1,5 @@
 '''
-Top-level module run on the Raspberry Pi for the Solder Joint Trainer.
+Top-level module run on the Raspberry Pi for the Component Checkout.
 
 Code taken and modified from:
 https://www.raspberrypi.org/documentation/usage/gpio/python/README.md
@@ -11,10 +11,10 @@ from time import sleep
 from picamera import PiCamera
 import Connect-Pi
 
-LED_1_PIN = 1
-LED_2_PIN = 2
-LED_3_PIN = 3
-BUTTON_PIN = 4
+LED_1_PIN = 2
+LED_2_PIN = 3
+LED_3_PIN = 4
+BUTTON_PIN = 5
 PICTURE_FILENAME = "cameraCapture.jpg"
 
 identifier_to_led = {"Resistor": LED(LED_1_PIN), "Capacitor": LED(LED_2_PIN), "IC": LED(LED_3_PIN)}
