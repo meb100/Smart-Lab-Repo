@@ -9,7 +9,7 @@ import RPi.GPIO as GPIO
 from gpiozero import Button, LED
 from time import sleep
 from picamera import PiCamera
-# import Connect-Pi
+import Connect_Pi
 
 LED_1_PIN = 2
 LED_2_PIN = 3
@@ -22,17 +22,16 @@ button = Button(BUTTON_PIN)
 camera = PiCamera()
 
 def main():
-	# Connect-Pi.connect(___, ___, ___, ___, ___, blinkLED) # TODO add parameters
+	Connect-Pi.connect("172.28.212.194", "81233cf9d9", "Component_Storage_Device", "Component_Checkout_Image", "Component_Checkout_Response", blinkLED) # TODO add parameters
 	setupCamera()
 	setupGPIO()
 
 	while True:
 		if GPIO.input(BUTTON_PIN) == 1:
 			pictureFile = takePicture()
-			# Connect-Pi.publishImage(pictureFile)
+			Connect-Pi.publishImage(pictureFile)
 			closePictureFile(pictureFile)
 			sleep(2)
-			blinkLED("Capacitor") # TODO just testing
 		
 	GPIO.cleanup()
 

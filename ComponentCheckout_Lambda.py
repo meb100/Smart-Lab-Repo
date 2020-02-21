@@ -8,10 +8,10 @@ Code taken and modified from:
 
 '''
 
-import Connect-Lambda
+import Connect_Lambda
 
 def main():
-	Connect-Lambda.connect(___, ___, ___, detectComponent)
+	Connect-Lambda.connect("Component_Checkout_Image", "Component_Checkout_Response", "receivedImage.jpg", detectComponent)
 
 
 # Called every time receives a publication.

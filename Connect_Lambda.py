@@ -14,9 +14,9 @@ import sys
 
 import greengrasssdk
 
-PUBLICATION_TOPIC = "Component_Checkout_Image"
-SUBSCRIPTION_TOPIC = "Component_Checkout_Response"
-PICTURE_FILENAME = "receivedImage.jpg"
+PUBLICATION_TOPIC = ""
+SUBSCRIPTION_TOPIC = ""
+PICTURE_FILENAME = ""
 
 client = None
 assembledImageCallback = None
