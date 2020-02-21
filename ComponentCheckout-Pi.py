@@ -5,11 +5,11 @@ Code taken and modified from:
 https://www.raspberrypi.org/documentation/usage/gpio/python/README.md
 https://picamera.readthedocs.io/en/release-1.13/recipes1.html
 '''
-
-from gpiozero import Button
+import RPi.GPIO as GPIO
+from gpiozero import Button, LED
 from time import sleep
 from picamera import PiCamera
-import Connect-Pi
+# import Connect-Pi
 
 LED_1_PIN = 2
 LED_2_PIN = 3
@@ -17,36 +17,46 @@ LED_3_PIN = 4
 BUTTON_PIN = 5
 PICTURE_FILENAME = "cameraCapture.jpg"
 
-identifier_to_led = {"Resistor": LED(LED_1_PIN), "Capacitor": LED(LED_2_PIN), "IC": LED(LED_3_PIN)}
+identifier_to_led = {"Resistor": LED_1_PIN, "Capacitor": LED_2_PIN, "IC": LED_3_PIN}
 button = Button(BUTTON_PIN)
 camera = PiCamera()
-pictureFile = open(PICTURE_FILENAME)
 
 def main():
-	Connect-Pi.connect(___, ___, ___, ___, ___, blinkLED) # TODO add parameters
+	# Connect-Pi.connect(___, ___, ___, ___, ___, blinkLED) # TODO add parameters
 	setupCamera()
+	setupGPIO()
+
 	while True:
-		button.wait_for_press()
-		Connect-Pi.publishImage(takePicture())
-		sleep(2)  # Make sure that the Pi has received a response from Lambda. 
-		# Don't want to send multiple messages simultaneously.
-	closePictureFile()
+		if GPIO.input(BUTTON_PIN) == 1:
+			pictureFile = takePicture()
+			# Connect-Pi.publishImage(pictureFile)
+			closePictureFile(pictureFile)
+			sleep(2)
+			blinkLED("Capacitor") # TODO just testing
+		
+	GPIO.cleanup()
+
+def setupGPIO():
+	GPIO.setmode(GPIO.BCM)
+	GPIO.setup(LED_1_PIN, GPIO.OUT)
+	GPIO.setup(LED_2_PIN, GPIO.OUT)
+	GPIO.setup(LED_3_PIN, GPIO.OUT)
+	GPIO.setup(BUTTON_PIN, GPIO.IN)
 
 def blinkLED(componentName):
-	identifier_to_led[componentName].on()
-	sleep(1)
-	identifier_to_led[componentName].off()
+	GPIO.output([identifier_to_led[componentName]], GPIO.HIGH)
+	sleep(2)
+	GPIO.output([identifier_to_led[componentName]], GPIO.LOW)
 
 def setupCamera():
 	camera.resolution = (1024, 768)
-	camera.start_preview()
 	sleep(2)
 
 def takePicture():
 	camera.capture(PICTURE_FILENAME)
-	pictureFile = open(PICTURE_FILENAME, "rb")
+	return open(PICTURE_FILENAME, "rb")
 
-def closePictureFile():
+def closePictureFile(pictureFile):
 	pictureFile.close()
 
 if __name__ == "__main__":
