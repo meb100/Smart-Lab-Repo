@@ -11,19 +11,19 @@ Code taken and modified from:
 import Connect_Lambda
 
 def main():
-	Connect-Lambda.connect("Component_Checkout_Image", "Component_Checkout_Response", "receivedImage.jpg", detectComponent)
+	Connect_Lambda.connect("Component_Checkout_Image", "Component_Checkout_Response", "receivedImage.jpg", detectComponent)
 
 
 # Called every time receives a publication.
 def function_handler(event, context):
-	Connect-Lambda.receiveImageBlock(event)
+	Connect_Lambda.receiveImageBlock(event)
 
 def detectComponent(pictureFile):
 	# TODO add SimpleCV code here
 	# 
 	#
 	#
-	Connect-Lambda.publish("Resistor")
+	Connect_Lambda.publish("Resistor")
 
 if __name__ == "__main__":
 	main()
