@@ -14,9 +14,8 @@ import sys
 
 import greengrasssdk
 
-THIS_CORE_NAME = "TODO ADD THIS HERE"
-PUBLICATION_TOPIC = ""
-SUBSCRIPTION_TOPIC = ""
+PUBLICATION_TOPIC = "Component_Checkout_Image"
+SUBSCRIPTION_TOPIC = "Component_Checkout_Response"
 PICTURE_FILENAME = "receivedImage.jpg"
 
 client = None
@@ -24,11 +23,10 @@ assembledImageCallback = None
 imageBlocks = []
 numBlocks = -1
 
-def connect(this_core_name, publication_topic, subscription_topic, assembledImageCallback):
-	THIS_CORE_NAME = this_core_name
+def connect(publication_topic, subscription_topic, assembledImageCallback):
 	PUBLICATION_TOPIC = publication_topic
 	SUBSCRIPTION_TOPIC = subscription_topic
-	client = greengrasssdk.client(THIS_CORE_NAME)
+	client = greengrasssdk.client("iot-data")
 	# client.subscribe(SUBSCRIPTION_TOPIC, 0, messageReceived)
 
 '''

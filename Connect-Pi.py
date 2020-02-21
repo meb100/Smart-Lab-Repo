@@ -16,11 +16,11 @@ from AWSIoTPythonSDK.core.greengrass.discovery.providers import DiscoveryInfoPro
 from AWSIoTPythonSDK.exception.AWSIoTExceptions import DiscoveryInvalidRequestException
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 
-GG_CORE_IP = ""
-HASH = ""
-THIS_DEVICE_NAME = ""
-PUBLICATION_TOPIC = ""
-SUBSCRIPTION_TOPIC = ""
+GG_CORE_IP = "172.28.212.194"
+HASH = "81233cf9d9"
+THIS_DEVICE_NAME = "Component_Storage_Device"
+PUBLICATION_TOPIC = "Component_Checkout_Image"
+SUBSCRIPTION_TOPIC = "Component_Checkout_Response"
 CONNECTIVITY_TIMEOUT = 10
 
 connectivityInfoList = [] # May contain many (host, port) options that may work on the gg core
