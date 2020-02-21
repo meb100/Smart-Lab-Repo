@@ -117,4 +117,5 @@ def publishImage(imageFile):
 		jsonDict = {"Number": counter, "Data": base64.b64encode(block)}
 		publish(json.dumps(jsonDict))
 		counter++
+	publish({"Number": "Num Blocks", "Data": counter}) #Send the number of blocks
 
