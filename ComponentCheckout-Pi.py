@@ -28,6 +28,8 @@ def main():
 	while True:
 		button.wait_for_press()
 		Connect-Pi.publishImage(takePicture())
+		sleep(2)  # Make sure that the Pi has received a response from Lambda. 
+		# Don't want to send multiple messages simultaneously.
 	closePictureFile()
 
 def blinkLED(componentName):

@@ -8,15 +8,18 @@ aws-greengrass-core-sdk-python/examples/greengrassHelloWorldCounter.py
 at https://github.com/aws/aws-greengrass-core-sdk-python
 '''
 
+import base64
 import json
 import sys
 
 THIS_CORE_NAME = "TODO ADD THIS HERE"
 PUBLICATION_TOPIC = ""
 SUBSCRIPTION_TOPIC = ""
+PICTURE_FILENAME = "receivedImage.jpg"
 
 client = None
 receivedMsgCallback = None
+imageBlocks = []
 
 def connect(this_core_name, publication_topic, subscription_topic, receivedMsgCallback):
 	THIS_CORE_NAME = this_core_name
@@ -32,14 +35,25 @@ def messageReceived(client, userdata, message):
 	else:
 		print("Received message with a different subscription topic. No action taken.")
 
-# This should be the receivedMsgCallback in the image receival case
-def receiveImage(message):	
+def receiveImageBlock(message):	
+	imageBlocks.append(message)
+
+def assembleReceivedImage():
 	BLOCK_SIZE = 300
 
-	# TODO. Remember: Image blocks received out of order. Plan: Received them all into a variable,
-	# Then after everything received, reconstruct the image and save it to a file.
-	
+	jpegString = ""
 
+	imageBlocks.sort(key=lambda block: block["Number"])
+	for block in imageBlocks:
+		jpegString += base64.decodeString(block["Data"])
+
+	pictureFile = open(PICTURE_FILENAME, "w")
+	pictureFile.write(jpegString)
+	pictureFile.close()
+
+	imageBlocks.clear() # Prep for next image
+
+	return pictureFile
 
 def publish(message):
 	client.publish(PUBLICATION_TOPIC, message, 0)

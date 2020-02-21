@@ -7,6 +7,7 @@ Code in this file is taken and modified from:
 aws-iot-device-sdk-python/greengrass/basicDiscovery.py at https://github.com/aws/aws-iot-device-sdk-python
 http://www.steves-internet-guide.com/send-file-mqtt/
 '''
+import base64
 import json
 import os
 import uuid
@@ -113,7 +114,7 @@ def publishImage(imageFile):
 	block = imageFile.read(BLOCK_SIZE)
 	counter = 0
 	while block is not "":
-		jsonDict = {"Number": counter, "Data": block}
+		jsonDict = {"Number": counter, "Data": base64.b64encode(block)}
 		publish(json.dumps(jsonDict))
 		counter++
 
