@@ -22,14 +22,15 @@ button = Button(BUTTON_PIN)
 camera = PiCamera()
 
 def main():
-	Connect-Pi.connect("172.28.212.194", "81233cf9d9", "Component_Storage_Device", "Component_Checkout_Image", "Component_Checkout_Response", blinkLED) # TODO add parameters
+	Connect_Pi.connect("172.28.212.194", "81233cf9d9", "Component_Storage_Device", "Component_Checkout_Image", "Component_Checkout_Response", blinkLED) # TODO add parameters
 	setupCamera()
 	setupGPIO()
 
 	while True:
 		if GPIO.input(BUTTON_PIN) == 1:
 			pictureFile = takePicture()
-			Connect-Pi.publishImage(pictureFile)
+			# Connect_Pi.publishImage(pictureFile)
+			Connect_Pi.publish("Resistor")
 			closePictureFile(pictureFile)
 			sleep(2)
 		

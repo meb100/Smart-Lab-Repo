@@ -16,7 +16,10 @@ def main():
 
 # Called every time receives a publication.
 def function_handler(event, context):
-	Connect_Lambda.receiveImageBlock(event)
+	print("In function_handler with publication " + event.topic + " " + event.payload)
+	# Connect_Lambda.receiveImageBlock(event)
+	detectComponent(None)
+
 
 def detectComponent(pictureFile):
 	# TODO add SimpleCV code here
