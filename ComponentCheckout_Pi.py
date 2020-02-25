@@ -1,6 +1,5 @@
 '''
-Top-level module run on the Raspberry Pi for the Component Checkout.
-
+n the Raspberry Pi for the Component Checkout.
 Code taken and modified from:
 https://www.raspberrypi.org/documentation/usage/gpio/python/README.md
 https://picamera.readthedocs.io/en/release-1.13/recipes1.html
@@ -10,6 +9,7 @@ from gpiozero import Button, LED
 from time import sleep
 from picamera import PiCamera
 import Connect_Pi
+import json
 
 LED_1_PIN = 2
 LED_2_PIN = 3
@@ -22,19 +22,20 @@ button = Button(BUTTON_PIN)
 camera = PiCamera()
 
 def main():
-	Connect_Pi.connect("172.28.212.194", "81233cf9d9", "Component_Storage_Device", "Component_Checkout_Image", "Component_Checkout_Response", blinkLED) # TODO add parameters
+	Connect_Pi.connect(blinkLED)
 	setupCamera()
-	setupGPIO()
+	# setupGPIO()
 
-	while True:
-		if GPIO.input(BUTTON_PIN) == 1:
-			pictureFile = takePicture()
-			# Connect_Pi.publishImage(pictureFile)
-			Connect_Pi.publish("Resistor")
-			closePictureFile(pictureFile)
-			sleep(2)
+	# while True:
+	# 	if GPIO.input(BUTTON_PIN) == 1:
+	pictureFile = takePicture()
+	# Connect_Pi.publishImage(pictureFile)
+	msg = {"ComponentName": "Resistor"}
+	Connect_Pi.publish(msg)
+	closePictureFile(pictureFile)
+	sleep(2)
 		
-	GPIO.cleanup()
+	# GPIO.cleanup()
 
 def setupGPIO():
 	GPIO.setmode(GPIO.BCM)
@@ -43,10 +44,11 @@ def setupGPIO():
 	GPIO.setup(LED_3_PIN, GPIO.OUT)
 	GPIO.setup(BUTTON_PIN, GPIO.IN)
 
-def blinkLED(componentName):
-	GPIO.output([identifier_to_led[componentName]], GPIO.HIGH)
-	sleep(2)
-	GPIO.output([identifier_to_led[componentName]], GPIO.LOW)
+def blinkLED(messageDictionary):
+	# GPIO.output([identifier_to_led[messageDictionary["ComponentName"]]], GPIO.HIGH)
+	# sleep(2)
+	# GPIO.output([identifier_to_led[messageDictionary["ComponentName"]]], GPIO.LOW)
+	print('Blinked LED corresponding to ' + messageDictionary["ComponentName"])
 
 def setupCamera():
 	camera.resolution = (1024, 768)

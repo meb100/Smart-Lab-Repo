@@ -1,121 +1,147 @@
-'''
-Calls functionality from the AWSIoTPythonSDK to connect a Raspberry Pi to
-a Lambda on the Greengrass core or on the cloud. Can be called from multiple
-modules in the SmartLab project, meant to be generic.
+# Copyright 2010-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# *
+# * Licensed under the Apache License, Version 2.0 (the "License").
+# * You may not use this file except in compliance with the License.
+# * A copy of the License is located at
+# *
+# *  http://aws.amazon.com/apache2.0
+# *
+# * or in the "license" file accompanying this file. This file is distributed
+# * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# * express or implied. See the License for the specific language governing
+# * permissions and limitations under the License.
+# */
 
-Code in this file is taken and modified from:
-aws-iot-device-sdk-python/greengrass/basicDiscovery.py at https://github.com/aws/aws-iot-device-sdk-python
-http://www.steves-internet-guide.com/send-file-mqtt/
-'''
-import base64
-import json
+
 import os
+import sys
+import time
 import uuid
-from AWSIoTPythonSDK.MQTTLib import 
+import json
+import logging
+import argparse
 from AWSIoTPythonSDK.core.greengrass.discovery.providers import DiscoveryInfoProvider
-from AWSIoTPythonSDK.exception.AWSIoTExceptions import DiscoveryInvalidRequestException
+from AWSIoTPythonSDK.core.protocol.connection.cores import ProgressiveBackOffCore
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
+from AWSIoTPythonSDK.exception.AWSIoTExceptions import DiscoveryInvalidRequestException
 
-GG_CORE_IP = ""
-HASH = ""
-THIS_DEVICE_NAME = ""
-PUBLICATION_TOPIC = ""
-SUBSCRIPTION_TOPIC = ""
-CONNECTIVITY_TIMEOUT = 10
+AllowedActions = ['both', 'publish', 'subscribe']
 
-connectivityInfoList = [] # May contain many (host, port) options that may work on the gg core
-groupCAPath = ""
+MAX_DISCOVERY_RETRIES = 10
+GROUP_CA_PATH = "./groupCA/"
 
-client = None
-receivedMsgCallback = None
+# Constants
+host = "a2t04pbjeytmzz-ats.iot.us-east-1.amazonaws.com"
+rootCAPath = "root-ca-cert.pem"
+certificatePath = "81233cf9d9.cert.pem"
+privateKeyPath = "81233cf9d9.private.key"
+clientId = "Component_Storage_Device"
+thingName = "Component_Storage_Device"
+publication_topic = "component/storage/device/to/lambda"
+subscription_topic = "component/storage/lambda/to/device"
 
-def connect(gg_core_ip, hash_encoding, this_device_name, publication_topic, subscription_topic, receivedMsgCallback):
-	GG_CORE_IP = gg_core_ip
-	HASH = hash_encoding
-	THIS_DEVICE_NAME = this_device_name
-	PUBLICATION_TOPIC = publication_topic
-	SUBSCRIPTION_TOPIC = subscription_topic
+myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId)
 
-	discover()
-	connectToCore()
+receiveFunction = None
 
-def discover():
-	discoveryInfoProvider = DiscoveryInfoProvider()
-	discoveryInfoProvider.configureEndpoint(GG_CORE_IP)
-	discoveryInfoProvider.configureCredentials("root-ca-cert.pem", HASH + ".cert.pem", HASH + ".private.key")
-	discoveryInfoProvider.configureTimeout(CONNECTIVITY_TIMEOUT)
+def connect(myReceiveFunction):
+    global receiveFunction
+    receiveFunction = myReceiveFunction
 
-	success = False
+    if not os.path.isfile(certificatePath):
+        parser.error("No certificate found at {}".format(certificatePath))
+        exit(3)
 
-	try:
-		discoveryInfo = discoveryInfoProvider.discover(THIS_DEVICE_NAME)
-		groupID = discoveryInfo.getAllCas()[0][0]
-		certificateAuthority = discoveryinfo.getAllCas()[0][1]
-		connectivityInfoList = discoveryinfo.getAllCores()[0].connectivityInfoList
+    if not os.path.isfile(privateKeyPath):
+        parser.error("No private key found at {}".format(privateKeyPath))
+        exit(3)
 
-		# Save the Group CA file
-		groupCAPath = "./groupCA/" + groupID + "_CA_" + str(uuid.uuid4()) + ".crt"
-		if not os.path.exists("./groupCA/"):
-			os.makedirs("./groupCA/")
-		groupCAFile = open(groupCAPath, "w")
-		groupCAFile.write(certificateAuthority)
-		groupCAFile.close()
+    # Progressive back off core
+    backOffCore = ProgressiveBackOffCore()
 
-		success = True
+    # Discover GGCs
+    discoveryInfoProvider = DiscoveryInfoProvider()
+    discoveryInfoProvider.configureEndpoint(host)
+    discoveryInfoProvider.configureCredentials(rootCAPath, certificatePath, privateKeyPath)
+    discoveryInfoProvider.configureTimeout(10)  # 10 sec
 
-	except (DiscoveryInvalidRequestException, BaseException) as e:
-		print("Exception during discovery phase:")
-		print(str(type(e)))
+    retryCount = MAX_DISCOVERY_RETRIES 
+    discovered = False
+    groupCA = None
+    coreInfo = None
+    while retryCount != 0:
+        try:
+            discoveryInfo = discoveryInfoProvider.discover(thingName)
+            caList = discoveryInfo.getAllCas()
+            coreList = discoveryInfo.getAllCores()
 
-	if success:
-		print("Discovery successful.")
-	else:
-		print("Discovery unsuccessful. System will exit.")
-		sys.exit(-1)
+            # We only pick the first ca and core info
+            groupId, ca = caList[0]
+            coreInfo = coreList[0]
 
-def connectToCore():
-	client = AWSIoTMQTTClient(THIS_DEVICE_NAME)
-	client.configureCredentials(groupCAPath, HASH + ".private.key", HASH + ".cert.pem")
+            groupCA = GROUP_CA_PATH + groupId + "_CA_" + str(uuid.uuid4()) + ".crt"
+            if not os.path.exists(GROUP_CA_PATH):
+                os.makedirs(GROUP_CA_PATH)
+            groupCAFile = open(groupCA, "w")
+            groupCAFile.write(ca)
+            groupCAFile.close()
 
-	success = False
-	for connectivityInfo in connectivityInfoList:
-		client.configureEndpoint(connectivityInfo.host, connectivityInfo.port)
-		try:
-			client.connect()
-			success = True
-		except BaseException as e:
-			print("Exception while connecting to core.")
-			print(e)
-			break
+            discovered = True
+            break
+        except DiscoveryInvalidRequestException as e:
+            print("Invalid discovery request detected!")
+            print("Type: %s" % str(type(e)))
+            print("Error message: %s" % e.message)
+            print("Stopping...")
+            break
+        except BaseException as e:
+            print("Error in discovery!")
+            print("Type: %s" % str(type(e)))
+            print("Error message: %s" % e.message)
+            retryCount -= 1
+            print("\n%d/%d retries left\n" % (retryCount, MAX_DISCOVERY_RETRIES))
+            print("Backing off...\n")
+            backOffCore.backOff()
 
-	if success:
-		print("Connection to core successful.")
-	else:
-		print("Connection to core unsuccessful. System is exiting.")
-		sys.exit(-2)
+    if not discovered:
+        print("Discovery failed after %d retries. Exiting...\n" % (MAX_DISCOVERY_RETRIES))
+        sys.exit(-1)
 
-	# Subscribe to receive messages
-	client.subscribe(SUBSCRIPTION_TOPIC, 0, messageReceived)
+    # Iterate through all connection options for the core and use the first successful one
+    myAWSIoTMQTTClient.configureCredentials(groupCA, privateKeyPath, certificatePath)
+    myAWSIoTMQTTClient.onMessage = customOnMessage
 
-# The message is the category name. This does not do anything with JSON.
-def messageReceived(client, userdata, message):
-	# TODO: we want message.payload, and we have to extract the right field from the json...or can I just send without json?
-	if message.topic == SUBSCRIPTION_TOPIC:
-		print("Received message with the correct subscription topic. Executing intended action.")
-		receivedMsgCallback(message.payload)
-	else:
-		print("Received message with a different subscription topic. No action taken.")
+    connected = False
+    for connectivityInfo in coreInfo.connectivityInfoList:
+        currentHost = connectivityInfo.host
+        currentPort = connectivityInfo.port
+        myAWSIoTMQTTClient.configureEndpoint(currentHost, currentPort)
+        try:
+            myAWSIoTMQTTClient.connect()
+            connected = True
+            break
+        except BaseException as e:
+            print("Error in connect!")
+            print("Type: %s" % str(type(e)))
+            print("Error message: %s" % e.message)
 
-def publish(message):
-	client.publish(PUBLICATION_TOPIC, message, 0)
+    if not connected:
+        print("Cannot connect to core %s. Exiting..." % coreInfo.coreThingArn)
+        sys.exit(-2)
 
-def publishImage(imageFile):
-	BLOCK_SIZE = 300
-	block = imageFile.read(BLOCK_SIZE)
-	counter = 0
-	while block is not "":
-		jsonDict = {"Number": counter, "Data": base64.b64encode(block)}
-		publish(json.dumps(jsonDict))
-		counter++
-	publish({"Number": "Num Blocks", "Data": counter}) #Send the number of blocks
+    # Successfully connected to the core
+    myAWSIoTMQTTClient.subscribe(subscription_topic, 0, None)
+    time.sleep(2)
+
+# General message notification callback
+# With current settings on my AWS account, the message payload must be JSON
+def customOnMessage(message):
+    print('Received message on topic %s: %s\n' % (message.topic, message.payload))
+    receiveFunction(json.loads(message.payload))
+
+def publish(messageDictionary):
+    messageJSON = json.dumps(messageDictionary)
+    myAWSIoTMQTTClient.publish(publication_topic, messageJSON, 0)
+    print('Published topic %s: %s\n' % (publication_topic, messageJSON))
+    time.sleep(1)
 
