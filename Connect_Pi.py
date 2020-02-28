@@ -12,7 +12,7 @@
 # * permissions and limitations under the License.
 # */
 
-
+import base64
 import os
 import sys
 import time
@@ -43,6 +43,7 @@ subscription_topic = "component/storage/lambda/to/device"
 myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId)
 
 receiveFunction = None
+imageBlocks = []
 
 def connect(myReceiveFunction):
     global receiveFunction
@@ -136,12 +137,56 @@ def connect(myReceiveFunction):
 # General message notification callback
 # With current settings on my AWS account, the message payload must be JSON
 def customOnMessage(message):
-    print('Received message on topic %s: %s\n' % (message.topic, message.payload))
-    receiveFunction(json.loads(message.payload))
-
+	print('Received message on topic %s: %s\n' % (message.topic, message.payload))
+	messageDictionary = json.loads(message.payload)
+	if messageDictionary["Description"] == "Num Blocks Ack":
+		publishImageData(range(len(imageBlocks)))
+	elif messageDictionary["Description"] == "Missing Blocks":
+		publishImageData(str.split(str(messageDictionary["Data"]), ","))
+	elif messageDictionary["Description"] == "Component Name":
+		receiveFunction(messageDictionary)
+	else:
+		print("Received message did not have a recognized Description field")
+	
 def publish(messageDictionary):
     messageJSON = json.dumps(messageDictionary)
     myAWSIoTMQTTClient.publish(publication_topic, messageJSON, 0)
     print('Published topic %s: %s\n' % (publication_topic, messageJSON))
     time.sleep(1)
+    
+def publishSingleImage(messageDictionary):
+    messageJSON = json.dumps(messageDictionary)
+    myAWSIoTMQTTClient.publish(publication_topic, messageJSON, 0)
+    print('Published topic %s: %s\n' % (publication_topic, messageJSON)) 
+    
+def initiatePublishingImage(imageFile):
+	global imageBlocks
+	imageBlocks = []
+	BLOCK_SIZE = 300
+	block = imageFile.read(BLOCK_SIZE)
+	counter = 0
+	while block:
+		jsonDict = {"Description": counter, "Data": base64.encodestring(block)}
+		imageBlocks.append(jsonDict)
 
+		block = imageFile.read(BLOCK_SIZE)
+		counter+=1
+	
+	jsonDict = {"Description": "Num Blocks", "Data": counter}
+	publish(jsonDict) #Send the number of blocks, seems like current resolution gives around 1400-1500 blocks
+
+# whichBlocks is list of indices
+counter = 0
+
+def publishImageData(whichBlocks):
+	global counter;
+	
+	for indexStr in whichBlocks:
+		index = int(indexStr)
+		publishSingleImage(imageBlocks[index])		
+	counter += 1
+
+	time.sleep(3) # Tune this so it's always after all data is received. On the other hand, seems like
+	# Lambda always receives the data (if it receives it at all) in same order as published
+	publish({"Description": "Done Sending Data", "Data": "Does not matter"})
+	

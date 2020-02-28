@@ -27,28 +27,32 @@ def main():
 	# setupGPIO()
 
 	# while True:
-	# 	if GPIO.input(BUTTON_PIN) == 1:
+	# if GPIO.input(BUTTON_PIN) == 1:
 	pictureFile = takePicture()
-	# Connect_Pi.publishImage(pictureFile)
-	msg = {"ComponentName": "Resistor"}
-	Connect_Pi.publish(msg)
+	Connect_Pi.initiatePublishingImage(pictureFile)
+	# msg = {"ComponentName": "Resistor"}
+	# Connect_Pi.publish(msg)
 	closePictureFile(pictureFile)
 	sleep(2)
+	
+	while True:
+		pass	
 		
 	# GPIO.cleanup()
-
+'''
 def setupGPIO():
 	GPIO.setmode(GPIO.BCM)
 	GPIO.setup(LED_1_PIN, GPIO.OUT)
 	GPIO.setup(LED_2_PIN, GPIO.OUT)
 	GPIO.setup(LED_3_PIN, GPIO.OUT)
 	GPIO.setup(BUTTON_PIN, GPIO.IN)
-
+'''
 def blinkLED(messageDictionary):
+	pass
 	# GPIO.output([identifier_to_led[messageDictionary["ComponentName"]]], GPIO.HIGH)
 	# sleep(2)
 	# GPIO.output([identifier_to_led[messageDictionary["ComponentName"]]], GPIO.LOW)
-	print('Blinked LED corresponding to ' + messageDictionary["ComponentName"])
+	# print('Blinked LED corresponding to ' + messageDictionary["ComponentName"])
 
 def setupCamera():
 	camera.resolution = (1024, 768)

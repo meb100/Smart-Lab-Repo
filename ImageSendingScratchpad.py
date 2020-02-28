@@ -16,8 +16,8 @@ def publishImage(imageFile):
 	BLOCK_SIZE = 300
 	block = imageFile.read(BLOCK_SIZE)
 	counter = 0
-	while block is not "":
-		jsonDict = {"Number": counter, "Data": block}
+	while block:
+		jsonDict = {"Number": counter, "Data": base64.encodestring(block)}
 		# publish(json.dumps(jsonDict))
 		print("Publishing... ")
 		print(jsonDict)
@@ -50,7 +50,7 @@ def assembleReceivedImage():
 
 	imageBlocks.sort(key=lambda block: block["Number"])
 	for block in imageBlocks:
-		jpegString += block["Data"]
+		jpegString += base64.decodestring(block["Data"])
 
 	pictureFile = open(PICTURE_FILENAME, "w")
 	pictureFile.write(jpegString)
