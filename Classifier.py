@@ -1,15 +1,15 @@
 import os
 from skimage import io, color, transform, img_as_uint
-from skimage.feature import canny
-from sklearn import svm
+# from skimage.feature import canny
+from sklearn import neighbors
 import pickle
 import math
-import statistics
+import numpy
 
 
 def main():
-    TRAINING_DATA_DIRECTORY = "my_data_1"
-    TEST_DATA_DIRECTORY = "my_data_2"
+    TRAINING_DATA_DIRECTORY = "HomeImages/HomeTraining"
+    TEST_DATA_DIRECTORY = "HomeImages/HomeTest"
     MODEL_FILE = "trained_model"
 
     train(TRAINING_DATA_DIRECTORY, MODEL_FILE)
@@ -28,9 +28,9 @@ def train(PARENT_DIRECTORY, MODEL_FILE):
     print("Y training data")
     print(y_train)
 
-    classifier = svm.SVC()
+    # classifier = svm.SVC()
     # classifier = SGDClassifier()
-    # classifier = KNeighborsClassifier()
+    classifier = neighbors.KNeighborsClassifier()
     # classifier = sklearn.naive_bayes.GaussianNB()
     # classifier = sklearn.tree.DecisionTreeClassifier()
 
@@ -82,87 +82,82 @@ def classify(PARENT_DIRECTORY, MODEL_FILE):
     for answer in checked_answers:
         if answer:
             correct_count += 1
-
-    print("Accuracy = ", (correct_count / len(y_correct_vals)))
+	accuracy = float(correct_count) / float(len(y_correct_vals))
+    print("Accuracy = ", accuracy)
 
 def feature_extractor(PARENT_DIRECTORY, X_train, y_train):
-    subdirectories = [subdir.name for subdir in os.scandir(PARENT_DIRECTORY)]
+    BACKGROUND_IMAGE_FILENAME = "background.JPG"
+    background_image_raw = io.imread(BACKGROUND_IMAGE_FILENAME)
+    background_image = convert_to_int(background_image_raw, False)
+    subdirectories = os.listdir(PARENT_DIRECTORY)
+    print(subdirectories)
     for subdirectory in subdirectories:
         if subdirectory[0] == '.':
             continue
 
         print("Loaded subdirectory = ", subdirectory)
         subdirectory_path = os.path.join(PARENT_DIRECTORY, subdirectory)
-        for image_filename in [file.name for file in os.scandir(subdirectory_path)]:
-            print("Image = ", image_filename)
-            if image_filename[0] == '.':
-                continue
+        walk_output = os.walk(subdirectory_path)
+        for dont_care, dont_care_either, all_images in walk_output:
+			for image_filename in all_images:
+				print("Image = ", image_filename)
+				if image_filename[0] == '.':
+					continue
 
-            image_raw = io.imread(os.path.join(subdirectory_path, image_filename))
-            image_raw = adjust_sizing(image_raw)
-            image = convert_to_int(image_raw)
-            # distances, normalized_distances = calculate_point_distances(image_raw)
-            # if distances == -1 and normalized_distances == -1:
-            #     continue
+				image_raw = io.imread(os.path.join(subdirectory_path, image_filename))
+				image_raw = adjust_sizing(image_raw)
+				image = convert_to_int(image_raw, True)
 
-            # Create feature vector
-            feature_vector = []
-            # feature_vector.append(statistics.stdev(normalized_distances))
-            # feature_vector.append(closestFurthestRatio(15, distances))
-            colorsExtractorResult = electrolyticColorsExtractor(image)
-            if colorsExtractorResult == -1:
-               continue
-            feature_vector.extend(colorsExtractorResult)
-            X_train.append(feature_vector)
-            y_train.append(subdirectory)
+				# Create feature vector
+				feature_vector = []
+				colorsExtractorResult = electrolyticColorsExtractor(image, background_image)
+				if colorsExtractorResult == -1:
+				   continue
+				feature_vector.extend(colorsExtractorResult)
+				print(feature_vector)
+				X_train.append(feature_vector)
+				y_train.append(subdirectory)
 
 
-def adjust_sizing(image_raw):
-    if image_raw.shape[0] < image_raw.shape[1]:
-        image_raw = transform.rotate(image_raw, 90, resize=True)
-    image_raw = transform.resize(image_raw, (700, 400))
-    return image_raw
-
-
-def electrolyticColorsExtractor(image):
+def electrolyticColorsExtractor(image, background_image):
+    # test_image = [[[0.1, 0.1, 0.1] for c in range(len(image[0]))] for r in range(len(image))]
+    
     color_counts = [0 for n in range(6)]
     non_background_pixels = 0
     for r in range(len(image)):
         for c in range(len(image[0])):
-            if not backgroundBrownColor(image[r][c]):  # quick background subtraction
+            if not backgroundBrownColor(image[r][c]): # backgroundColor(image[r][c], r, c, background_image): # background subtraction
                 non_background_pixels += 1
+                '''
                 if electrolyticTextColor(image[r][c]):
                     color_counts[0] += 1
+                '''
                 if electrolyticBlackColor(image[r][c]):
-                    color_counts[1] += 1
+                    color_counts[0] += 1
                 if ceramicColor(image[r][c]):
-                    color_counts[2] += 1
+                    color_counts[1] += 1
+                '''
                 if resistorTan(image[r][c]):
                     color_counts[3] += 1
                 if resistorBlue(image[r][c]):
                     color_counts[4] += 1
                 if resistorGrey(image[r][c]):
                     color_counts[5] += 1
+                '''
 
-    differences = []
-    for other_index in range(2, 6):
-        differences.append((color_counts[0] + color_counts[1]) - color_counts[other_index])
-
-    # Normalize differences
-    for n in range(len(differences)):
-        differences[n] = differences[n] / non_background_pixels
-    # return differences
+    # io.imsave("test_image.png", img_as_uint(test_image))
+	
+    feature_vector = [color_counts[0], color_counts[1], color_counts[0] - color_counts[1]]
+    feature_vector = [float(value)/float(non_background_pixels) for value in feature_vector]
+    return feature_vector
 
 
-    # Normalize color_counts[0], [1] and only return those
-    # return [color_counts[0] / 10000, color_counts[1] / 10000]
-
-
-    return [difference / 10000 for difference in differences]
-    # return differences
+def backgroundColor(color, row, col, background_image):
+	THRESHOLD = 30
+	return abs(color[0] - background_image[row][col][0]) <= THRESHOLD and abs(color[1] - background_image[row][col][1]) <= THRESHOLD and abs(color[2] - background_image[row][col][2]) <= THRESHOLD
 
 def backgroundBrownColor(color):
-    return color[0] - color[1] > 50 and color[0] - color[1] < 80 and color[1] - color[2] > 25 and color[1] - color[2] < 70
+    return color[0] - color[1] > 40 and color[0] - color[1] < 70 and color[1] - color[2] > 10 and color[1] - color[2] < 50
 
 def electrolyticTextColor(color):
     return color[0] > 90 and color[1] > 90 and color[2] > 90 and max(color[0], color[1], color[2]) - min(color[0], color[1], color[2]) < 25
@@ -171,7 +166,7 @@ def electrolyticBlackColor(color):
     return color[0] < 125 and color[1] < 125 and color[2] < 125 and max(color[0], color[1], color[2]) - min(color[0], color[1], color[2]) < 30
 
 def ceramicColor(color):
-    return color[0] - color[1] >= 65 and color[0] - color[1] <= 100 and color[1] - color[2] >= 30
+    return color[0] - color[1] > 70 and color[0] - color[1] < 120 and color[1] - color[2] > 10 and color[1] - color[2] < 50
 
 def resistorTan(color):
     return color[0] - color[1] >= 25 and color[0] - color[1] <= 60 and color[1] - color[2] >= 25 and color[1] - color[2] <= 60
@@ -199,7 +194,7 @@ def closestFurthestRatio(num_points, distances):
         print("Alert - min_distances or max_distances is 0")
         return -1
 
-    return statistics.mean(min_distances) / statistics.mean(max_distances)
+    return numpy.mean(min_distances) / numpy.mean(max_distances)
 
 
 def calculate_point_distances(image_raw):
@@ -338,12 +333,21 @@ def color_border_pixels(edges_image):
                 break
     return border_image
 
+def adjust_sizing(image_raw):
+    if image_raw.shape[0] < image_raw.shape[1]:
+        image_raw = transform.rotate(image_raw, 90, resize=True)
+    image_raw = transform.resize(image_raw, (700, 400))
+    return image_raw
 
-def convert_to_int(image_raw):
+
+def convert_to_int(image_raw, decimalRGB):
     image = [[[0, 0, 0] for c in range(len(image_raw[0]))] for r in range(len(image_raw))]
     for r in range(len(image)):
         for c in range(len(image[0])):
-            image[r][c] = [int(image_raw[r][c][0] * 255), int(image_raw[r][c][1] * 255), int(image_raw[r][c][2] * 255)]
+			if decimalRGB:
+				image[r][c] = [int(image_raw[r][c][0] * 255), int(image_raw[r][c][1] * 255), int(image_raw[r][c][2] * 255)]
+			else:
+				image[r][c] = [int(image_raw[r][c][0]), int(image_raw[r][c][1]), int(image_raw[r][c][2])]
     return image
 
 if __name__ == '__main__':
