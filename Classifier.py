@@ -8,8 +8,8 @@ import numpy
 
 
 def main():
-    TRAINING_DATA_DIRECTORY = "HomeImages/HomeTraining"
-    TEST_DATA_DIRECTORY = "HomeImages/HomeTest"
+    TRAINING_DATA_DIRECTORY = "greenDataCollection/Training"
+    TEST_DATA_DIRECTORY = "greenDataCollection/Test"
     MODEL_FILE = "trained_model"
 
     train(TRAINING_DATA_DIRECTORY, MODEL_FILE)
@@ -86,9 +86,6 @@ def classify(PARENT_DIRECTORY, MODEL_FILE):
     print("Accuracy = ", accuracy)
 
 def feature_extractor(PARENT_DIRECTORY, X_train, y_train):
-    BACKGROUND_IMAGE_FILENAME = "background.JPG"
-    background_image_raw = io.imread(BACKGROUND_IMAGE_FILENAME)
-    background_image = convert_to_int(background_image_raw, False)
     subdirectories = os.listdir(PARENT_DIRECTORY)
     print(subdirectories)
     for subdirectory in subdirectories:
@@ -110,7 +107,7 @@ def feature_extractor(PARENT_DIRECTORY, X_train, y_train):
 
 				# Create feature vector
 				feature_vector = []
-				colorsExtractorResult = electrolyticColorsExtractor(image, background_image)
+				colorsExtractorResult = electrolyticColorsExtractor(image)
 				if colorsExtractorResult == -1:
 				   continue
 				feature_vector.extend(colorsExtractorResult)
@@ -119,63 +116,37 @@ def feature_extractor(PARENT_DIRECTORY, X_train, y_train):
 				y_train.append(subdirectory)
 
 
-def electrolyticColorsExtractor(image, background_image):
+def electrolyticColorsExtractor(image):
     # test_image = [[[0.1, 0.1, 0.1] for c in range(len(image[0]))] for r in range(len(image))]
     
-    color_counts = [0 for n in range(6)]
+    color_counts = [0 for n in range(3)]
     non_background_pixels = 0
     for r in range(len(image)):
         for c in range(len(image[0])):
-            if not backgroundBrownColor(image[r][c]): # backgroundColor(image[r][c], r, c, background_image): # background subtraction
+            if not backgroundGreenColor(image[r][c]): # background subtraction
                 non_background_pixels += 1
-                '''
-                if electrolyticTextColor(image[r][c]):
-                    color_counts[0] += 1
-                '''
                 if electrolyticBlackColor(image[r][c]):
                     color_counts[0] += 1
                 if ceramicColor(image[r][c]):
                     color_counts[1] += 1
-                '''
                 if resistorTan(image[r][c]):
-                    color_counts[3] += 1
-                if resistorBlue(image[r][c]):
-                    color_counts[4] += 1
-                if resistorGrey(image[r][c]):
-                    color_counts[5] += 1
-                '''
+                    color_counts[2] += 1
 
     # io.imsave("test_image.png", img_as_uint(test_image))
 	
-    feature_vector = [color_counts[0], color_counts[1], color_counts[0] - color_counts[1]]
-    feature_vector = [float(value)/float(non_background_pixels) for value in feature_vector]
-    return feature_vector
+    return [float(value)/float(non_background_pixels) for value in color_counts]
 
-
-def backgroundColor(color, row, col, background_image):
-	THRESHOLD = 30
-	return abs(color[0] - background_image[row][col][0]) <= THRESHOLD and abs(color[1] - background_image[row][col][1]) <= THRESHOLD and abs(color[2] - background_image[row][col][2]) <= THRESHOLD
-
-def backgroundBrownColor(color):
-    return color[0] - color[1] > 40 and color[0] - color[1] < 70 and color[1] - color[2] > 10 and color[1] - color[2] < 50
-
-def electrolyticTextColor(color):
-    return color[0] > 90 and color[1] > 90 and color[2] > 90 and max(color[0], color[1], color[2]) - min(color[0], color[1], color[2]) < 25
+def backgroundGreenColor(color):
+	return abs(color[0] - color[1]) < 25 and abs(color[1] - color[2]) < 25 and color[0] > 50 and color[1] > 50 and color[2] > 50
 
 def electrolyticBlackColor(color):
-    return color[0] < 125 and color[1] < 125 and color[2] < 125 and max(color[0], color[1], color[2]) - min(color[0], color[1], color[2]) < 30
+    return abs(color[0] - color[1]) < 15 and abs(color[1] - color[2]) < 15 and color[0] < 50 and color[1] < 50 and color[2] < 50
 
 def ceramicColor(color):
-    return color[0] - color[1] > 70 and color[0] - color[1] < 120 and color[1] - color[2] > 10 and color[1] - color[2] < 50
+    return color[0] - color[1] > 25 and color[0] - color[1] < 70 and abs(color[1] - color[2]) < 15 and color[0] < 100
 
 def resistorTan(color):
-    return color[0] - color[1] >= 25 and color[0] - color[1] <= 60 and color[1] - color[2] >= 25 and color[1] - color[2] <= 60
-
-def resistorBlue(color):
-    return color[0] - color[1] >= 80 and color[0] - color[1] <= 120 and color[1] - color[2] >= 80 and color[1] - color[2] <= 120
-
-def resistorGrey(color):
-    return color[0] - color[1] >= 10 and color[0] - color[1] <= 55 and color[1] - color[2] >= 0 and color[1] - color[2] <= 35
+    return color[0] - color[1] > 25 and color[0] - color[1] < 60 and abs(color[1] - color[2]) < 15 and color[0] > 100
 
 def closestFurthestRatio(num_points, distances):
     my_distances = [distance for distance in distances]
