@@ -1,7 +1,6 @@
 import greengrasssdk
 import json
-import base64
-import Classifier_Lambda
+import FeatureExtractor_Lambda
 
 numBlocks = -1
 imageBlocks = []
@@ -27,11 +26,14 @@ def receiveImageBlock(messageDictionary):
             if imageBlocks[n] == -1:
                 missingBlockIndices.append(str(n))
         if len(missingBlockIndices) == 0:
+            print("Image blocks before the call:")
+            print(imageBlocks)
             assembleReceivedImage()
         else:
             publish({"Description": "Missing Blocks", "Data": ",".join(missingBlockIndices)})
     else:
         imageBlocks[int(messageDictionary["Description"])] = messageDictionary
+        print("Blah appended image block ", int(messageDictionary["Description"]))
 
 
 # print("number = " + str(messageDictionary["Number"]) + " numBlocks = " + str(numBlocks) + ", imageBlocks length = " + str(len(imageBlocks)))
@@ -39,18 +41,21 @@ def receiveImageBlock(messageDictionary):
 
 def assembleReceivedImage():
     global numBlocks
-    print("Starting assembleReceivedImage()")
+    global imageBlocks
+    print("Blah Starting assembleReceivedImage()")
     BLOCK_SIZE = 300
-    jpegString = ""
+    # jpegString = ""
+    
+    print("Here is the imageBlocks list:")
+    print(imageBlocks)
 
-    for block in imageBlocks:
-        jpegString += block["Data"]
+    # for block in imageBlocks:
+    #    jpegString += block["Data"]
 
-    print("jpegString:" + jpegString)
-    result = Classifier_Lambda.classify(imageBlocks)
-    print("Result: " + result)
+    # print("jpegString:" + jpegString)
+    result = FeatureExtractor_Lambda.get_feature_vector(imageBlocks)
 
-    msgDict = {"Description": "Component Name", "Data": result}
+    msgDict = {"Description": "Feature Vector", "Data": result}
     publish(msgDict)
 
 
