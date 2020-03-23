@@ -47,6 +47,8 @@ myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId)
 receiveFunction = None
 imageBlocks = []
 
+preparing_image_time = 0
+
 def connect(myReceiveFunction):
     global receiveFunction
     receiveFunction = myReceiveFunction
@@ -139,9 +141,12 @@ def connect(myReceiveFunction):
 # General message notification callback
 # With current settings on my AWS account, the message payload must be JSON
 def customOnMessage(message):
+	global preparing_image_time
+	
 	print('Received message on topic %s: %s\n' % (message.topic, message.payload))
 	messageDictionary = json.loads(message.payload)
 	if messageDictionary["Description"] == "Num Blocks Ack":
+		preparing_image_time = float(messageDictionary["Time"])
 		publishImageData(range(len(imageBlocks)))
 	elif messageDictionary["Description"] == "Missing Blocks":
 		publishImageData(str.split(str(messageDictionary["Data"]), ","))

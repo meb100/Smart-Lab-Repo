@@ -12,6 +12,7 @@ import Connect_Pi
 import json
 import pickle
 import string
+import time
 from sklearn import neighbors
 
 LED_1_PIN = 2
@@ -32,11 +33,14 @@ checking_in_mode = False
 
 counts = {"Resistor": 0, "Ceramic": 0, "Electrolytic": 0}
 
+times = []
+
 def main():
 	global completed_blink
 	global classifier
 	global checking_out_mode
 	global checking_in_mode
+	global times
 	
 	Connect_Pi.connect(classifyAndBlinkLED)
 	setupCamera()
@@ -45,16 +49,22 @@ def main():
 
 	while True:
 		if completed_blink and GPIO.input(BUTTON_OUT_PIN) == 1:
+			times.append(time.time())
 			checking_out_mode = True
 			completed_blink = False
 			pictureFile = takePicture()
+			times.append(time.time())
 			Connect_Pi.initiatePublishingImage(pictureFile)
+			times.append(time.time())
 			closePictureFile(pictureFile)
 		elif completed_blink and GPIO.input(BUTTON_IN_PIN) == 1:
+			times.append(time.time())
 			checking_in_mode = True
 			completed_blink = False
 			pictureFile = takePicture()
+			times.append(time.time())
 			Connect_Pi.initiatePublishingImage(pictureFile)
+			times.append(time.time())
 			closePictureFile(pictureFile)
 		
 	GPIO.cleanup()
@@ -82,11 +92,31 @@ def classifyAndBlinkLED(messageDictionary):
 	global checking_out_mode
 	global checking_in_mode
 	global counts
+	global times
+	global preparing_image_time
 	
-	print("Classifying")
 	feature_vector = messageDictionary["Data"]
+	extracting_features_time = float(messageDictionary["Time"])
+	
+	times.append(time.time())
+	print("Classifying")
 	result = classifier.predict([feature_vector])
 	print("Classification complete. Result: " + result[0])
+	times.append(time.time())
+	
+	print("********")
+	print("Timing results:")
+	print("Taking picture: " + str(times[1] - times[0]))
+	print("Splitting image into blocks: " + str(times[2] - times[1]))
+	print("Preparing for receiving image (Lambda): " + str(Connect_Pi.preparing_image_time))
+	print("Extracting features (Lambda): " + str(extracting_features_time))
+	print("Classifying: " + str(times[4] - times[3]))
+	print("********")
+	print("Network time (sending ready, sending ack, sending image, sending classification) " + str((times[4] - times[0]) - Connect_Pi.preparing_image_time - extracting_features_time))
+	print("********")
+	print("Total time: " + str(times[4] - times[0]))
+	
+	times = []
 	
 	for component in identifier_to_led.keys():
 		GPIO.output([identifier_to_led[component]], GPIO.LOW)
