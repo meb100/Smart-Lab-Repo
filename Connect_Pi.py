@@ -12,6 +12,8 @@
 # * permissions and limitations under the License.
 # */
 
+from PIL import Image
+import string
 import base64
 import os
 import sys
@@ -44,6 +46,8 @@ myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId)
 
 receiveFunction = None
 imageBlocks = []
+
+preparing_image_time = 0
 
 def connect(myReceiveFunction):
     global receiveFunction
@@ -137,13 +141,16 @@ def connect(myReceiveFunction):
 # General message notification callback
 # With current settings on my AWS account, the message payload must be JSON
 def customOnMessage(message):
+	global preparing_image_time
+	
 	print('Received message on topic %s: %s\n' % (message.topic, message.payload))
 	messageDictionary = json.loads(message.payload)
 	if messageDictionary["Description"] == "Num Blocks Ack":
+		preparing_image_time = float(messageDictionary["Time"])
 		publishImageData(range(len(imageBlocks)))
 	elif messageDictionary["Description"] == "Missing Blocks":
 		publishImageData(str.split(str(messageDictionary["Data"]), ","))
-	elif messageDictionary["Description"] == "Component Name":
+	elif messageDictionary["Description"] == "Feature Vector":
 		receiveFunction(messageDictionary)
 	else:
 		print("Received message did not have a recognized Description field")
@@ -157,24 +164,29 @@ def publish(messageDictionary):
 def publishSingleImage(messageDictionary):
     messageJSON = json.dumps(messageDictionary)
     myAWSIoTMQTTClient.publish(publication_topic, messageJSON, 0)
-    print('Published topic %s: %s\n' % (publication_topic, messageJSON)) 
+    # print('Published topic %s: %s\n' % (publication_topic, messageJSON)) 
     
 def initiatePublishingImage(imageFile):
 	global imageBlocks
 	imageBlocks = []
-	BLOCK_SIZE = 300
-	block = imageFile.read(BLOCK_SIZE)
-	counter = 0
-	while block:
-		jsonDict = {"Description": counter, "Data": base64.encodestring(block)}
+
+	# Each row sent separately
+	fullImage = imageFile.load()
+	print(imageFile.size)
+	for r in range(imageFile.size[1]):
+		row_data_list = []
+		for c in range(imageFile.size[0]):
+			row_data_list.append(fullImage[c, r])  # c is x coord, r is y coord
+		row_data_list_strings = [str(pixel) for pixel in row_data_list]
+		row_data_string = "".join(row_data_list_strings)
+		row_data_string = string.replace(string.replace(string.replace(string.replace(row_data_string, ", ", ","), ")(", "/"), "(", ""), ")", "")
+		jsonDict = {"Description": r, "Data": row_data_string}
 		imageBlocks.append(jsonDict)
-
-		block = imageFile.read(BLOCK_SIZE)
-		counter+=1
+		
+	print(imageBlocks[0])
+	jsonDict = {"Description": "Num Blocks", "Data": imageFile.size[1]}
+	publish(jsonDict)
 	
-	jsonDict = {"Description": "Num Blocks", "Data": counter}
-	publish(jsonDict) #Send the number of blocks, seems like current resolution gives around 1400-1500 blocks
-
 # whichBlocks is list of indices
 counter = 0
 
@@ -183,6 +195,7 @@ def publishImageData(whichBlocks):
 	
 	for indexStr in whichBlocks:
 		index = int(indexStr)
+		print("Publishing index: ", index)
 		publishSingleImage(imageBlocks[index])		
 	counter += 1
 
