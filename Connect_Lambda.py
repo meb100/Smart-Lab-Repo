@@ -1,6 +1,7 @@
 import greengrasssdk
 import json
 import FeatureExtractor_Lambda
+import time
 
 numBlocks = -1
 imageBlocks = []
@@ -13,11 +14,14 @@ def receiveImageBlock(messageDictionary):
 
     if messageDictionary["Description"] == "Num Blocks":
         print("In Num Blocks block")
+        setup_start_time = time.time()
         numBlocks = int(messageDictionary["Data"])
         imageBlocks = []
         for n in range(numBlocks):
             imageBlocks.append(-1)
-        publish({"Description": "Num Blocks Ack", "Data": "Does not matter"})
+        setup_end_time = time.time()
+        setup_elapsed_time = setup_end_time - setup_start_time
+        publish({"Description": "Num Blocks Ack", "Time": str(setup_elapsed_time)})
     elif messageDictionary["Description"] == "Done Sending Data":
         print("In Done Sending Data block")
         # Check for -1s in imageBlocks
@@ -53,9 +57,13 @@ def assembleReceivedImage():
     #    jpegString += block["Data"]
 
     # print("jpegString:" + jpegString)
+    
+    start_time = time.time()
     result = FeatureExtractor_Lambda.get_feature_vector(imageBlocks)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
 
-    msgDict = {"Description": "Feature Vector", "Data": result}
+    msgDict = {"Description": "Feature Vector", "Data": result, "Time": str(elapsed_time)}
     publish(msgDict)
 
 
