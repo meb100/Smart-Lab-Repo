@@ -52,20 +52,18 @@ def main():
 			times.append(time.time())
 			checking_out_mode = True
 			completed_blink = False
-			pictureFile = takePicture()
+			takePicture()
 			times.append(time.time())
-			Connect_Pi.initiatePublishingImage(pictureFile)
+			Connect_Pi.initiatePublishingImage()
 			times.append(time.time())
-			closePictureFile(pictureFile)
 		elif completed_blink and GPIO.input(BUTTON_IN_PIN) == 1:
 			times.append(time.time())
 			checking_in_mode = True
 			completed_blink = False
-			pictureFile = takePicture()
+			takePicture()
 			times.append(time.time())
-			Connect_Pi.initiatePublishingImage(pictureFile)
+			Connect_Pi.initiatePublishingImage()
 			times.append(time.time())
-			closePictureFile(pictureFile)
 		
 	GPIO.cleanup()
 
@@ -154,11 +152,6 @@ def setupCamera():
 
 def takePicture():
 	camera.capture(PICTURE_FILENAME)
-	# return open(PICTURE_FILENAME, "rb")
-	return Image.open(PICTURE_FILENAME)
-
-def closePictureFile(pictureFile):
-	pictureFile.close()
 
 if __name__ == "__main__":
 	main()

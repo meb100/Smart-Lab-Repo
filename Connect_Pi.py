@@ -45,7 +45,8 @@ subscription_topic = "component/storage/lambda/to/device"
 myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId)
 
 receiveFunction = None
-imageBlocks = []
+
+rows_per_block = 4
 
 preparing_image_time = 0
 
@@ -147,9 +148,7 @@ def customOnMessage(message):
 	messageDictionary = json.loads(message.payload)
 	if messageDictionary["Description"] == "Num Blocks Ack":
 		preparing_image_time = float(messageDictionary["Time"])
-		publishImageData(range(len(imageBlocks)))
-	elif messageDictionary["Description"] == "Missing Blocks":
-		publishImageData(str.split(str(messageDictionary["Data"]), ","))
+		publishImageData()
 	elif messageDictionary["Description"] == "Feature Vector":
 		receiveFunction(messageDictionary)
 	else:
@@ -166,40 +165,31 @@ def publishSingleImage(messageDictionary):
     myAWSIoTMQTTClient.publish(publication_topic, messageJSON, 0)
     # print('Published topic %s: %s\n' % (publication_topic, messageJSON)) 
     
-def initiatePublishingImage(imageFile):
-	global imageBlocks
-	imageBlocks = []
-
-	# Each row sent separately
+def initiatePublishingImage():
+	global rows_per_block
+	
+	image_rows = 700
+	num_blocks = image_rows / rows_per_block
+		
+	jsonDict = {"Description": "Num Blocks", "Data": num_blocks}
+	publish(jsonDict)
+	
+def publishImageData():
+	global rows_per_block
+	
+	imageFile = Image.open("cameraCapture.jpg")
 	fullImage = imageFile.load()
 	print(imageFile.size)
+	block = []
 	for r in range(imageFile.size[1]):
 		row_data_list = []
 		for c in range(imageFile.size[0]):
 			row_data_list.append(fullImage[c, r])  # c is x coord, r is y coord
-		row_data_list_strings = [str(pixel) for pixel in row_data_list]
-		row_data_string = "".join(row_data_list_strings)
-		row_data_string = string.replace(string.replace(string.replace(string.replace(row_data_string, ", ", ","), ")(", "/"), "(", ""), ")", "")
-		jsonDict = {"Description": r, "Data": row_data_string}
-		imageBlocks.append(jsonDict)
-		
-	print(imageBlocks[0])
-	jsonDict = {"Description": "Num Blocks", "Data": imageFile.size[1]}
-	publish(jsonDict)
-	
-# whichBlocks is list of indices
-counter = 0
-
-def publishImageData(whichBlocks):
-	global counter;
-	
-	for indexStr in whichBlocks:
-		index = int(indexStr)
-		print("Publishing index: ", index)
-		publishSingleImage(imageBlocks[index])		
-	counter += 1
-
-	time.sleep(3) # Tune this so it's always after all data is received. On the other hand, seems like
-	# Lambda always receives the data (if it receives it at all) in same order as published
-	publish({"Description": "Done Sending Data", "Data": "Does not matter"})
+		block.append(row_data_list)
+		if r % rows_per_block == rows_per_block - 1:
+			jsonDict = {"Description": r, "Data": block}
+			print("Publishing block ending with row: ", r)
+			publishSingleImage(jsonDict)					
+			block = []
+	imageFile.close()
 	
