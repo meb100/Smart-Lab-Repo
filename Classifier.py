@@ -8,9 +8,9 @@ import numpy
 
 
 def main():
-    TRAINING_DATA_DIRECTORY = "greenDataCollection/Training"
-    TEST_DATA_DIRECTORY = "greenDataCollection/Test"
-    MODEL_FILE = "trained_model"
+    TRAINING_DATA_DIRECTORY = "greenDataCollection/TrainingLight"
+    TEST_DATA_DIRECTORY = "greenDataCollection/TestLight"
+    MODEL_FILE = "trained_model_from_classifier"
 
     train(TRAINING_DATA_DIRECTORY, MODEL_FILE)
     classify(TEST_DATA_DIRECTORY, MODEL_FILE)
@@ -116,6 +116,27 @@ def feature_extractor(PARENT_DIRECTORY, X_train, y_train):
 				y_train.append(subdirectory)
 
 
+def colorBins(image):
+	BIN_SIZE = 16
+	num_bins_one_dim = 256 / BIN_SIZE
+	
+	bins = [[[0 for b in range(num_bins_one_dim)] for g in range(num_bins_one_dim)] for r in range(num_bins_one_dim)]
+	
+	for r in range(len(image)):
+		for c in range(len(image[0])):
+			red_index = image[r][c][0] / BIN_SIZE
+			green_index = image[r][c][1] / BIN_SIZE
+			blue_index = image[r][c][2] / BIN_SIZE
+			bins[red_index][green_index][blue_index] += 1
+	
+	feature_vector = []
+	for r in range(len(bins)):
+		for g in range(len(bins[0])):
+			for b in range(len(bins[0][0])):
+				feature_vector.append(bins[r][g][b])
+	
+	return feature_vector
+
 def electrolyticColorsExtractor(image):
     # test_image = [[[0.1, 0.1, 0.1] for c in range(len(image[0]))] for r in range(len(image))]
     
@@ -123,30 +144,37 @@ def electrolyticColorsExtractor(image):
     non_background_pixels = 0
     for r in range(len(image)):
         for c in range(len(image[0])):
-            if not backgroundGreenColor(image[r][c]): # background subtraction
+            if not (backgroundGreenColor(image[r][c]) or backgroundShadowColor(image[r][c])): # background subtraction
                 non_background_pixels += 1
-                if electrolyticBlackColor(image[r][c]):
+                if electrolyticBlueColor(image[r][c]):
                     color_counts[0] += 1
+                    # test_image[r][c][1] = 1
                 if ceramicColor(image[r][c]):
                     color_counts[1] += 1
-                if resistorTan(image[r][c]):
+                    # test_image[r][c][2] = 1
+                if wireColor(image[r][c]):
                     color_counts[2] += 1
+                    # test_image[r][c][1] = 1
 
     # io.imsave("test_image.png", img_as_uint(test_image))
 	
     return [float(value)/float(non_background_pixels) for value in color_counts]
 
-def backgroundGreenColor(color):
-	return abs(color[0] - color[1]) < 25 and abs(color[1] - color[2]) < 25 and color[0] > 50 and color[1] > 50 and color[2] > 50
+def backgroundShadowColor(color):
+	return color[0] <= 50 and color[1] <= 50 and color[2] <= 50
+	# return abs(color[0] - color[1]) <= 6 and abs(color[1] - color[2]) <= 6 and abs(color[0] - color[2]) <= 6
 
-def electrolyticBlackColor(color):
-    return abs(color[0] - color[1]) < 15 and abs(color[1] - color[2]) < 15 and color[0] < 50 and color[1] < 50 and color[2] < 50
+def backgroundGreenColor(color):
+	return color[1] - color[0] > 6 and color[1] - color[0] < 60 and color[1] - color[2] > 40 and color[1] - color[2] <= 120
+
+def electrolyticBlueColor(color):
+    return color[2] - color[0] > 6 and color[2] - color[0] < 150
 
 def ceramicColor(color):
-    return color[0] - color[1] > 25 and color[0] - color[1] < 70 and abs(color[1] - color[2]) < 15 and color[0] < 100
+    return color[0] - color[1] >= 12 and color[0] - color[1] <= 80 and abs(color[1] - color[2]) < 100
 
-def resistorTan(color):
-    return color[0] - color[1] > 25 and color[0] - color[1] < 60 and abs(color[1] - color[2]) < 15 and color[0] > 100
+def wireColor(color):
+	return color[0] - color[1] > 80 and color[0] - color[1] <= 150 and abs(color[1] - color[2]) < 150
 
 def closestFurthestRatio(num_points, distances):
     my_distances = [distance for distance in distances]
