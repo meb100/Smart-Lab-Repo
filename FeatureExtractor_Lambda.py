@@ -1,58 +1,48 @@
-import pickle
 
-def get_feature_vector(image_blocks):
-    MODEL_FILE = "trained_model"
-    BUCKET = "wine-example"
+feature_vector = [0, 0, 0]
+non_background_pixels = 0
 
-    print("Initializing feature extractor")
-    feature_vector = feature_extractor(image_blocks)
-    print("Feature extraction complete")
-    print("X test data:")
-    print(feature_vector)
+# Input: "1,2,3/1,2,3/1,2,3-1,2,3/1,2,3/1,2,3"
+# Input: [{"Data": "1,2,3/1,2,3/1,2,3-1,2,3/1,2,3/1,2,3", "Description": 23}, ..., ...] - each block is a row
+'''
+def extract_from_block(block):
+    global feature_vector
+    global non_background_pixels
 
-    if feature_vector is None:
-        print("Alert - no X_test data found")
-        return "Error"
+    rows_unsplit = block["Data"].split("-") # ["1,2,3/1,2,3/1,2,3", "1,2,3/1,2,3/1,2,3"], Each elt: "1,2,3/1,2,3/1,2,3"
+    for row in rows_unsplit:
+        image_rgb_as_strings = row.split("/")   # ["1, 2, 3", "1, 2, 3"] (single row) Each elt: "1, 2, 3"
+        for col in image_rgb_as_strings:
+            pixel_string = col.split(",")   # ["1", "2", "3"] (single row, col location) Each elt: "1"
+            pixel = [int(pixel_string[0]), int(pixel_string[1]), int(pixel_string[2])]
+            electrolyticColorsExtractor(pixel)
+'''
 
-    return feature_vector
+def extract_from_block(block):
+    for row in block:
+        for pixel in row:
+            electrolyticColorsExtractor(pixel)
 
-def feature_extractor(image_blocks):
-    image = blocks_to_int_image(image_blocks)
+def electrolyticColorsExtractor(pixel):
+    global feature_vector
+    global non_background_pixels
 
-    # Create feature vector
-    feature_vector = []
-    colorsExtractorResult = electrolyticColorsExtractor(image)
-    if colorsExtractorResult == -1:
-        return
-    feature_vector.extend(colorsExtractorResult)
-    return feature_vector
-
-
-def electrolyticColorsExtractor(image):
-    # test_image = [[[0.1, 0.1, 0.1] for c in range(len(image[0]))] for r in range(len(image))]
-    
-    color_counts = [0 for n in range(3)]
-    non_background_pixels = 0
-    for r in range(len(image)):
-        for c in range(len(image[0])):
-            if not backgroundGreenColor(image[r][c]): # background subtraction
-                non_background_pixels += 1
-                if electrolyticBlackColor(image[r][c]):
-                    color_counts[0] += 1
-                if ceramicColor(image[r][c]):
-                    color_counts[1] += 1
-                if resistorTan(image[r][c]):
-                    color_counts[2] += 1
-
-    # io.imsave("test_image.png", img_as_uint(test_image))
-    
-    return [float(value)/float(non_background_pixels) for value in color_counts]
+    if not backgroundGreenColor(pixel):  # background subtraction
+        non_background_pixels += 1
+        if electrolyticBlackColor(pixel):
+            feature_vector[0] += 1
+        if ceramicColor(pixel):
+            feature_vector[1] += 1
+        if resistorTan(pixel):
+            feature_vector[2] += 1
 
 def backgroundGreenColor(color):
-    return abs(color[0] - color[1]) < 25 and abs(color[1] - color[2]) < 25 and color[0] > 50 and color[1] > 50 and color[2] > 50
+    return abs(color[0] - color[1]) < 25 and abs(color[1] - color[2]) < 25 and color[0] > 50 and color[1] > 50 and \
+           color[2] > 50
 
 def electrolyticBlackColor(color):
-    return abs(color[0] - color[1]) < 15 and abs(color[1] - color[2]) < 15 and color[0] < 50 and color[1] < 50 and color[2] < 50
+    return abs(color[0] - color[1]) < 15 and abs(color[1] - color[2]) < 15 and color[0] < 50 and color[1] < 50 and \
+           color[2] < 50
 
 def ceramicColor(color):
     return color[0] - color[1] > 25 and color[0] - color[1] < 70 and abs(color[1] - color[2]) < 15 and color[0] < 100
@@ -60,14 +50,7 @@ def ceramicColor(color):
 def resistorTan(color):
     return color[0] - color[1] > 25 and color[0] - color[1] < 60 and abs(color[1] - color[2]) < 15 and color[0] > 100
 
-# Input: "1,2,3/1,2,3/1,2,3"
-# Input: [{"Data": "1,2,3/1,2,3/1,2,3", "Description": 23}, ..., ...] - each block is a row
-def blocks_to_int_image(image_blocks):
-    image = []
-    for block in image_blocks:
-        intermed_vector = block["Data"].split("/")  # ["1,2,3", "1,2,3", "1,2,3"]
-        row_vector = [entry.split(",") for entry in intermed_vector] # [["1", "2", "3"], ["1", "2", "3"]]
-        for c in range(len(row_vector)):
-            row_vector[c] = [int(row_vector[c][0]), int(row_vector[c][1]), int(row_vector[c][2])]
-        image.append(row_vector)
-    return image
+def normalize_feature_vector():
+    global feature_vector
+    for n in range(len(feature_vector)):
+       feature_vector[n]  = float(feature_vector[n]) / float(non_background_pixels)
