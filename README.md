@@ -4,7 +4,7 @@ Smart Lab Project for Edge Computing (ECE 590.04). Uses AWS Greengrass.
 Run with Python 2.7
 
 Run on Lambda:  
-ComponentCheckout_Lambda.py - top level with handler. 
+ComponentCheckout_Lambda.py - top level with handler.  
 Connect_Lambda.py   
 FeatureExtractor_Lambda.py  
 
