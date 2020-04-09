@@ -1,3 +1,8 @@
+'''
+Some code (espeically the discovery part) taken and modified from:
+https://github.com/aws/aws-iot-device-sdk-python/blob/master/samples/greengrass/basicDiscovery.py
+'''
+
 # Copyright 2010-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # *
 # * Licensed under the Apache License, Version 2.0 (the "License").
@@ -22,6 +27,8 @@ import uuid
 import json
 import logging
 import argparse
+import zlib
+import math
 from AWSIoTPythonSDK.core.greengrass.discovery.providers import DiscoveryInfoProvider
 from AWSIoTPythonSDK.core.protocol.connection.cores import ProgressiveBackOffCore
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
@@ -39,16 +46,22 @@ certificatePath = "81233cf9d9.cert.pem"
 privateKeyPath = "81233cf9d9.private.key"
 clientId = "Component_Storage_Device"
 thingName = "Component_Storage_Device"
-publication_topic = "component/storage/device/to/lambda"
-subscription_topic = "component/storage/lambda/to/device"
+publication_topic_0 = "component/storage/device/to/lambda/0"
+publication_topic_1 = "component/storage/device/to/lambda/1"
+publication_topic_2 = "component/storage/device/to/lambda/2"
+publication_topic_3 = "component/storage/device/to/lambda/3"
+subscription_topic_0 = "component/storage/lambda/to/device/0"
+subscription_topic_1 = "component/storage/lambda/to/device/1"
+subscription_topic_2 = "component/storage/lambda/to/device/2"
+subscription_topic_3 = "component/storage/lambda/to/device/3"
 
 myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId)
 
+# Variables
 receiveFunction = None
-
-rows_per_block = 4
-
-preparing_image_time = 0
+resolution = (0, 0)
+rows_per_block = 14
+record = []
 
 def connect(myReceiveFunction):
     global receiveFunction
@@ -136,60 +149,61 @@ def connect(myReceiveFunction):
         sys.exit(-2)
 
     # Successfully connected to the core
-    myAWSIoTMQTTClient.subscribe(subscription_topic, 0, None)
+    myAWSIoTMQTTClient.subscribe(subscription_topic_0, 0, None)
+    myAWSIoTMQTTClient.subscribe(subscription_topic_1, 0, None)
+    myAWSIoTMQTTClient.subscribe(subscription_topic_2, 0, None)
+    myAWSIoTMQTTClient.subscribe(subscription_topic_3, 0, None)
     time.sleep(2)
 
-# General message notification callback
-# With current settings on my AWS account, the message payload must be JSON
 def customOnMessage(message):
-	global preparing_image_time
-	
-	print('Received message on topic %s: %s\n' % (message.topic, message.payload))
-	messageDictionary = json.loads(message.payload)
-	if messageDictionary["Description"] == "Num Blocks Ack":
-		preparing_image_time = float(messageDictionary["Time"])
-		publishImageData()
-	elif messageDictionary["Description"] == "Feature Vector":
-		receiveFunction(messageDictionary)
-	else:
-		print("Received message did not have a recognized Description field")
-	
-def publish(messageDictionary):
-    messageJSON = json.dumps(messageDictionary)
-    myAWSIoTMQTTClient.publish(publication_topic, messageJSON, 0)
-    print('Published topic %s: %s\n' % (publication_topic, messageJSON))
-    time.sleep(1)
-    
-def publishSingleImage(messageDictionary):
-    messageJSON = json.dumps(messageDictionary)
-    myAWSIoTMQTTClient.publish(publication_topic, messageJSON, 0)
-    # print('Published topic %s: %s\n' % (publication_topic, messageJSON)) 
-    
-def initiatePublishingImage():
+	global record
+	global resolution
 	global rows_per_block
 	
-	image_rows = 700
-	num_blocks = image_rows / rows_per_block
-		
-	jsonDict = {"Description": "Num Blocks", "Data": num_blocks}
-	publish(jsonDict)
-	
+	record.append(message)
+	# print('Received message on topic %s: %s\n' % (message.topic, message.payload))
+	if len(record) == math.ceil(float(resolution[1]) / float(rows_per_block)):
+		receiveFunction()
+
+def publish(messageDictionary, this_publication_topic):
+    messageJSON = json.dumps(messageDictionary)
+    myAWSIoTMQTTClient.publish(this_publication_topic, messageJSON, 0)
+    print('Published topic %s: %s\n' % (this_publication_topic, messageJSON))
+    time.sleep(1)
+    
+def publishSingleImage(formatted_block, this_publication_topic):
+    myAWSIoTMQTTClient.publish(this_publication_topic, formatted_block, 0) 
+
 def publishImageData():
 	global rows_per_block
 	
-	imageFile = Image.open("cameraCapture.jpg")
+	# PIL is much faster than io.imread in sklearn
+	imageFile = Image.open("cameraCapture.png")
 	fullImage = imageFile.load()
+	
 	print(imageFile.size)
+	
 	block = []
-	for r in range(imageFile.size[1]):
+	publication_topic_number = 0
+	for r in range(imageFile.size[1]):  # imageFile.size: (width, height)
 		row_data_list = []
 		for c in range(imageFile.size[0]):
-			row_data_list.append(fullImage[c, r])  # c is x coord, r is y coord
+			fullImage_list = [fullImage[c, r][0], fullImage[c, r][1], fullImage[c, r][2]]  # Must be list for loads parsing in Lambda
+			row_data_list.append(fullImage_list)  # c is x coord, r is y coord
 		block.append(row_data_list)
 		if r % rows_per_block == rows_per_block - 1:
-			jsonDict = {"Description": r, "Data": block}
-			print("Publishing block ending with row: ", r)
-			publishSingleImage(jsonDict)					
+			compressedMessage = base64.b64encode(str(block).encode('zlib_codec'))
+			publishSingleImage(json.dumps({"Message": compressedMessage}), "component/storage/device/to/lambda/" + str(publication_topic_number))
+			# Uncomment for 4 Lambdas
+			# publication_topic_number = (publication_topic_number + 1) % 4			
 			block = []
+			
+	if resolution[1] % rows_per_block != 0:
+		compressedMessage = base64.b64encode(str(block).encode('zlib_codec'))
+		publishSingleImage(json.dumps({"Message": compressedMessage}), "component/storage/device/to/lambda/" + str(publication_topic_number))
+		
 	imageFile.close()
+	
+
+
 	

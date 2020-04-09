@@ -1,7 +1,6 @@
 '''
-n the Raspberry Pi for the Component Checkout.
-Code taken and modified from:
-https://www.raspberrypi.org/documentation/usage/gpio/python/README.md
+Some code taken/modified from:
+https://sourceforge.net/p/raspberry-gpio-python/wiki/BasicUsage/
 https://picamera.readthedocs.io/en/release-1.13/recipes1.html
 '''
 from PIL import Image
@@ -13,6 +12,7 @@ import json
 import pickle
 import string
 import time
+import numpy
 from sklearn import neighbors
 
 LED_1_PIN = 2
@@ -20,9 +20,9 @@ LED_2_PIN = 3
 LED_3_PIN = 4
 BUTTON_OUT_PIN = 5
 BUTTON_IN_PIN = 6
-PICTURE_FILENAME = "cameraCapture.jpg"
+PICTURE_FILENAME = "cameraCapture.png"
 
-identifier_to_led = {"Resistor": LED_1_PIN, "Ceramic": LED_2_PIN, "Electrolytic": LED_3_PIN}
+identifier_to_led = {"Wire": LED_1_PIN, "Ceramic": LED_2_PIN, "Electrolytic": LED_3_PIN}
 camera = PiCamera()
 
 completed_blink = True
@@ -31,39 +31,44 @@ classifier = None
 checking_out_mode = False
 checking_in_mode = False
 
-counts = {"Resistor": 0, "Ceramic": 0, "Electrolytic": 0}
+counts = {"Wire": 0, "Ceramic": 0, "Electrolytic": 0}
 
-times = []
+global_start_time = -1
+
+resolution = (400, 700)  # (width, height)
+global_feature_vector = []
+BIN_SIZE = 16
 
 def main():
 	global completed_blink
 	global classifier
 	global checking_out_mode
 	global checking_in_mode
-	global times
+	global global_feature_vector
+	global global_start_time
 	
+	Connect_Pi.resolution = resolution
 	Connect_Pi.connect(classifyAndBlinkLED)
-	setupCamera()
+	setupCamera(resolution)
 	setupGPIO()
 	classifier = loadTrainedModel()
-
+	num_bins_one_dim = 256 / BIN_SIZE
+	global_feature_vector = [0 for n in range(num_bins_one_dim * num_bins_one_dim * num_bins_one_dim)]
+	print("Feature vector setup complete")
+	
 	while True:
 		if completed_blink and GPIO.input(BUTTON_OUT_PIN) == 1:
-			times.append(time.time())
+			global_start_time = time.time()
 			checking_out_mode = True
 			completed_blink = False
 			takePicture()
-			times.append(time.time())
-			Connect_Pi.initiatePublishingImage()
-			times.append(time.time())
+			Connect_Pi.publishImageData()
 		elif completed_blink and GPIO.input(BUTTON_IN_PIN) == 1:
-			times.append(time.time())
+			global_start_time = time.time()
 			checking_in_mode = True
 			completed_blink = False
 			takePicture()
-			times.append(time.time())
-			Connect_Pi.initiatePublishingImage()
-			times.append(time.time())
+			Connect_Pi.publishImageData()
 		
 	GPIO.cleanup()
 
@@ -76,7 +81,8 @@ def setupGPIO():
 	GPIO.setup(BUTTON_IN_PIN, GPIO.IN)
 
 def loadTrainedModel():
-	MODEL_FILE = "trained_model"
+	# Insert trained model name here
+	MODEL_FILE = "trained_model_bins_normalized_700_400"
 	
 	print("Loading trained model")
 	trained_model_file = open(MODEL_FILE, 'rb')
@@ -84,37 +90,37 @@ def loadTrainedModel():
 	print("Model loaded")
 	return classifier
 
-def classifyAndBlinkLED(messageDictionary):
-	global completed_blink
+def classifyAndBlinkLED():
 	global classifier
+	global global_feature_vector
+	
+	for message in Connect_Pi.record:
+		messageDictionary = json.loads(message.payload)
+		my_feature_vector_dictionary = messageDictionary["Feature Vector"]
+		for (index, count) in my_feature_vector_dictionary.iteritems():
+			global_feature_vector[int(index)] += count
+			
+	for n in range(len(global_feature_vector)):
+		if global_feature_vector[n] != 0:
+			global_feature_vector[n] = float(global_feature_vector[n]) / (float(resolution[0] * resolution[1]))
+	
+	result = classifier.predict([global_feature_vector])
+	
+	global_end_time = time.time()
+	extracting_features_time = numpy.average(messageDictionary["FV Time"])
+	
+	blinkLED(result, extracting_features_time, global_end_time)
+	
+def blinkLED(result, extracting_features_time, global_end_time):
+	global completed_blink
 	global checking_out_mode
 	global checking_in_mode
 	global counts
-	global times
-	global preparing_image_time
+	global global_start_time
+	global global_feature_vector
 	
-	feature_vector = messageDictionary["Data"]
-	extracting_features_time = float(messageDictionary["Time"])
-	
-	times.append(time.time())
-	print("Classifying")
-	result = classifier.predict([feature_vector])
-	print("Classification complete. Result: " + result[0])
-	times.append(time.time())
-	
-	print("********")
-	print("Timing results:")
-	print("Taking picture: " + str(times[1] - times[0]))
-	print("Splitting image into blocks: " + str(times[2] - times[1]))
-	print("Preparing for receiving image (Lambda): " + str(Connect_Pi.preparing_image_time))
-	print("Extracting features (Lambda): " + str(extracting_features_time))
-	print("Classifying: " + str(times[4] - times[3]))
-	print("********")
-	print("Network time (sending ready, sending ack, sending image, sending classification) " + str((times[4] - times[0]) - Connect_Pi.preparing_image_time - extracting_features_time))
-	print("********")
-	print("Total time: " + str(times[4] - times[0]))
-	
-	times = []
+	print("Extracting features time, not including decompression (average): " + str(extracting_features_time))
+	print("Total time: " + str(global_end_time - global_start_time))
 	
 	for component in identifier_to_led.keys():
 		GPIO.output([identifier_to_led[component]], GPIO.LOW)
@@ -145,9 +151,12 @@ def classifyAndBlinkLED(messageDictionary):
 	checking_out_mode = False
 	checking_in_mode = False
 	completed_blink = True
+	num_bins_one_dim = 256 / BIN_SIZE
+	global_feature_vector = [0 for n in range(num_bins_one_dim * num_bins_one_dim * num_bins_one_dim)]
+	Connect_Pi.record = []
 
-def setupCamera():
-	camera.resolution = (400, 700) # (1024, 768)
+def setupCamera(resolution):
+	camera.resolution = resolution
 	sleep(2)
 
 def takePicture():
