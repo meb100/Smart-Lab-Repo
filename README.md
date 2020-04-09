@@ -1,9 +1,18 @@
 # Smart-Lab-Repo
 Smart Lab Project for Edge Computing (ECE 590.04). Uses AWS Greengrass.
 
-Python files ending in "_Pi" run on the end device Pi.
-Python files ending in "_Lambda" run on the Lambda in Greengrass.
+Run with Python 2.7
 
-End Device Raspberry Pi runs ComponentCheckout_Pi.py (likely "python ComponentCheckout_Pi.py"). Run this to start the whole system.
+Run on Lambda:
+ComponentCheckout_Lambda.py - top level with handler
+Connect_Lambda.py
+FeatureExtractor_Lambda.py
 
-Top level of Lambda (with handler function) is ComponentCheckout_Lambda.py
+Run on End Device Raspberry Pi:
+ComponentCheckout_Pi.py - top level, run with "python ComponentCheckout_Pi.py" to start the whole system
+Connect_Pi.py
+
+Offline Training and Classification:
+Classifier.py
+dataset directory
+trained_model_bins_normalized_700_400
